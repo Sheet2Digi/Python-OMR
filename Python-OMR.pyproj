@@ -5,7 +5,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{05ac0d70-36d9-4f96-94ed-6e15fac81150}</ProjectGuid>
     <ProjectHome />
-    <StartupFile>prototype1.py</StartupFile>
+    <StartupFile>prototype2.py</StartupFile>
     <SearchPath />
     <WorkingDirectory>.</WorkingDirectory>
     <OutputPath>.</OutputPath>
@@ -13,6 +13,7 @@
     <LaunchProvider>Standard Python launcher</LaunchProvider>
     <InterpreterId />
     <InterpreterVersion />
+    <IsWindowsApplication>False</IsWindowsApplication>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'" />
   <PropertyGroup Condition="'$(Configuration)' == 'Release'" />
@@ -1354,6 +1355,12 @@
     <Content Include="README.txt" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="distance.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="prototype2.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="opencv\sources\3rdparty\jinja2\bccache.py" />
     <Compile Include="opencv\sources\3rdparty\jinja2\compiler.py" />
     <Compile Include="opencv\sources\3rdparty\jinja2\constants.py" />
