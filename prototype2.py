@@ -1,13 +1,17 @@
 ﻿import numpy as np
 import cv2
 from distance import distance
+import random
 
 def nothing(x):
     pass
 
-def main2():
+def main(fileName):
 
     cv2.namedWindow('sliders')
+    cv2.namedWindow('sliders2')
+    cv2.resizeWindow("sliders", 1000, 350)
+    cv2.resizeWindow("sliders2", 1000, 350)
 
     cv2.createTrackbar('Horizontal Threshold','sliders',5,100,nothing)
     cv2.createTrackbar('Vertical Threshold','sliders',105,200,nothing)
@@ -18,28 +22,39 @@ def main2():
     cv2.createTrackbar('Canny Threshold 1','sliders',102,300,nothing)
     cv2.createTrackbar('Canny Threshold 2','sliders',60,300,nothing)
 
-    cv2.createTrackbar('Rho','sliders',46,360,nothing)
-    cv2.createTrackbar('Theta','sliders',160,360,nothing)
+    cv2.createTrackbar('Rho','sliders2',46,360,nothing)
+    cv2.createTrackbar('Theta','sliders2',160,360,nothing)
 
-    cv2.createTrackbar('Minimum Line Length','sliders',1,300,nothing)
-    cv2.createTrackbar('Maximum Line Gap','sliders',50,300,nothing)
+    cv2.createTrackbar('Minimum Line Length','sliders2',1,300,nothing)
+    cv2.createTrackbar('Maximum Line Gap','sliders2',50,300,nothing)
 
-    cv2.createTrackbar('Note Threshold','sliders',50,100,nothing)
-    cv2.createTrackbar('Note Scale','sliders',100,400,nothing)
+    cv2.createTrackbar('Note Threshold','sliders2',50,100,nothing)
+    cv2.createTrackbar('Picture Scale','sliders2',100,400,nothing)
 
     #cap = cv2.VideoCapture(0)
 
-    templateIn = cv2.imread('note.jpg',0)
+    template = cv2.imread('note.png',0)
+    w, h = template.shape[::-1]
 
-    while(True):
+    contProc = True
+    saveFile = False
+    notes = []
+
+    while(contProc):
         # Capture frame-by-frame
-        frame = cv2.imread('C-Major.jpg')
+        frameIn = cv2.imread(fileName)
+
+        picScale = cv2.getTrackbarPos('Picture Scale','sliders2')/100.0
+        frame = cv2.resize(frameIn, (0,0), fx=picScale, fy=picScale) 
+
         #ret, frame = cap.read()
 
         # Our operations on the frame come here
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         a = 1+(2*cv2.getTrackbarPos('a','sliders'))
+        if a == 1:
+            a = 3
         b = -cv2.getTrackbarPos('b','sliders')
 
         bw = cv2.adaptiveThreshold(~gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, a, b)
@@ -48,7 +63,11 @@ def main2():
         horizontal = bw.copy()
 
         horizThresh = cv2.getTrackbarPos('Horizontal Threshold','sliders')
+        if horizThresh == 0:
+            horizThresh = 1
         vertThresh = cv2.getTrackbarPos('Vertical Threshold','sliders')
+        if vertThresh == 0:
+            vertThresh = 1
 
         canny1 = cv2.getTrackbarPos('Canny Threshold 1','sliders')
         canny2 = cv2.getTrackbarPos('Canny Threshold 2','sliders')
@@ -61,18 +80,16 @@ def main2():
         verticalsize = vertical.shape[0] / vertThresh;
         verticalStructure = cv2.getStructuringElement(cv2.MORPH_RECT, (4,verticalsize));
         vertical = cv2.erode(vertical, verticalStructure)
-        vertical =  cv2.dilate(vertical, verticalStructure)
+        vertical = cv2.dilate(vertical, verticalStructure)
         vertical = cv2.bitwise_not(vertical)
+        vertical = cv2.GaussianBlur(vertical,(3,3),0)
 
         vertical_edges = cv2.Canny(vertical,canny1,canny2,apertureSize = 3)
 
-        noteScale = cv2.getTrackbarPos('Note Scale','sliders')/100.0
-        template = cv2.resize(templateIn, (0,0), fx=noteScale, fy=noteScale) 
-        w, h = template.shape[::-1]
 
         template_edges = cv2.Canny(template,canny1,canny2,apertureSize = 3)
         res = cv2.matchTemplate(vertical_edges,template_edges,cv2.TM_CCOEFF_NORMED)
-        threshold = cv2.getTrackbarPos('Note Threshold','sliders')/100.0
+        threshold = cv2.getTrackbarPos('Note Threshold','sliders2')/100.0
         loc = np.where( res >= threshold)
 
         locReduced = []
@@ -92,55 +109,19 @@ def main2():
                     
         if locReduced is not None:
             locReduced = sorted(locReduced,key=lambda l:l[0])
-            for loc in locReduced:
-                x1,y1 = loc
-                cv2.circle(frame, (int(loc[0]+w/2.0),int(loc[1]+h/2.0)), 15, (0,0,255))
+            for i in range(len(locReduced)):
+                loc = locReduced[i]
+                newLoc = (int(loc[0]+w/2.0),int(loc[1]+h/2.0))
+                locReduced[i] = newLoc
+                cv2.circle(frame, (locReduced[i][0],locReduced[i][1]), 5, (0,0,255))
                 
 
 
-        ## Setup SimpleBlobDetector parameters.
-        #params = cv2.SimpleBlobDetector_Params()
- 
-        ## Change thresholds
-        #params.minThreshold = 1;
-        #params.maxThreshold = 100;
- 
-        ## Filter by Area.
-        #params.filterByArea = False
-        #params.minArea = 300
- 
-        ## Filter by Circularity
-        #params.filterByCircularity = True
-        #params.minCircularity = 0.5
- 
-        ## Filter by Convexity
-        #params.filterByConvexity = True
-        #params.minConvexity = 0.87
- 
-        ## Filter by Inertia
-        #params.filterByInertia = True
-        #params.minInertiaRatio = 0.01
- 
-        ## Create a detector with the parameters
-        #ver = (cv2.__version__).split('.')
-        #if int(ver[0]) < 3 :
-        #    detector = cv2.SimpleBlobDetector(params)
-        #else : 
-        #    detector = cv2.SimpleBlobDetector_create(params)
+        rho = np.pi/(cv2.getTrackbarPos('Rho','sliders2')+0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001)
+        theta = cv2.getTrackbarPos('Theta','sliders2')
 
-        ## Detect blobs.
-        #keypoints = detector.detect(vertical)
- 
-        ## Draw detected blobs as red circles.
-        ## cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS ensures the size of the circle corresponds to the size of blob
-        #frame = cv2.drawKeypoints(frame, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-
-
-        rho = np.pi/(cv2.getTrackbarPos('Rho','sliders')+0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001)
-        theta = cv2.getTrackbarPos('Theta','sliders')
-
-        minLength = cv2.getTrackbarPos('Minimum Line Length','sliders')
-        maxGap = cv2.getTrackbarPos('Maximum Line Gap','sliders')
+        minLength = cv2.getTrackbarPos('Minimum Line Length','sliders2')
+        maxGap = cv2.getTrackbarPos('Maximum Line Gap','sliders2')
 
         linesReduced = []
 
@@ -152,7 +133,7 @@ def main2():
                 if linesReduced is not None:
                     for lineR in linesReduced:
                         cx1,cy1,cx2,cy2 = lineR
-                        if distance((x1,y1),(cx1,cy1)) < 5.0:
+                        if distance((0,y1),(0,cy1)) < 5.0:
                             contains = True
                             break
                 if not contains:
@@ -162,41 +143,87 @@ def main2():
           
         if linesReduced is not None:
             linesReduced = sorted(linesReduced,key=lambda l:l[1])
+            testtemp = 0
             for line in linesReduced:
+                testtemp += 1
                 x1,y1,x2,y2 = line
                 cv2.line(frame, (x1,y1),(x2,y2),(0,255,0),2)
                 barYs.append(y1)
 
         
-        avgDist = 0
+        avgDist = 0.0
 
         if barYs is not None:
-            for i in range(len(barYs)-1):
-                avgDist += barYs[i+1]-barYs[i]
-            avgDist /= len(barYs)-1
-            print avgDist
+            if len(barYs) != 1:
+                for i in range(len(barYs)-1):
+                    avgDist += barYs[i+1]-barYs[i]
+                avgDist /= len(barYs)-1
 
-        
+        errorTol = 0.25
+        lineError = int(round(avgDist*errorTol, 0))
 
-        ## Display the resulting frame
+        if locReduced is not None:
+            for loc in locReduced:
+                result = None
+                x1,y1 = loc
+                if y1 < (barYs[0]-lineError):
+                    numLines = (barYs[0]-y1)/float(avgDist)
+                    for i in range(1,13):
+                        distCalc = i*.5;
+                        if distance((0,numLines),(0,distCalc)) < errorTol:
+                            result = -i
+                    #ledgerlineUp
+                elif y1 > (barYs[len(barYs)-1]+lineError):
+                    numLines = (y1-barYs[len(barYs)-1])/float(avgDist)
+                    for i in range(1,13):
+                        distCalc = i*.5;
+                        if distance((0,numLines),(0,distCalc)) < errorTol:
+                            result = i+8
+                    #ledgerlineDown
+                else:
+                    for i in range(len(barYs)):
+                        if distance((0,y1),(0,barYs[i])) <= lineError:
+                            result = 2*i
+                        elif distance((0,y1),(0,barYs[i]+avgDist*.5)) <= lineError:
+                            result = (2*i)+1
+                if result is not None:
+                    result -= 5
+                    result = -result
+                    noteLetter = (result)%7
+                    noteLetter += 97
+                    octave = result/7
+                    octave += 4
+                    noteResult = ""
+                    noteResult += chr(noteLetter)
+                    noteResult += str(octave)
+                    cv2.putText(frame,noteResult,(x1,y1), cv2.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,255),2,cv2.LINE_AA)  #+":"+str(result)
+                    if saveFile == True:
+                        contProc = False
+                        notes.append(noteResult)
+
+        # Display the resulting frame
         cv2.imshow('frame',frame)
-        cv2.imshow('frame2',bw)
+        cv2.imshow('frame2',template)
         cv2.imshow('frame3',horizontal)
         cv2.imshow('frame4',vertical)
         cv2.imshow('frame5',vertical_edges)
 
-        if cv2.waitKey(1) & 0xFF == ord('p'):
-            while(True):
-                if cv2.waitKey(1) & 0xFF == ord('o'):
-                    break
+        if saveFile == True:
+            outFile = open('Notes.txt','w')
+            for i in range(len(notes)):
+                outFile.write("("+notes[i]+",4)\n")
+            outFile.close()
+
+        if cv2.waitKey(1) & 0xFF == ord('s'):
+            saveFile = True
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
+
+        
 
     # When everything done, release the capture
     #cap.release()
     cv2.destroyAllWindows()
 
-main2()
-
-#Capital middle C, up lowercase, down comma, up '
+main('testLine.jpg')
