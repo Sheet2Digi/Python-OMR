@@ -16,7 +16,7 @@ def main(fileName):
     cv2.createTrackbar('Horizontal Threshold','sliders',5,100,nothing)
     cv2.createTrackbar('Vertical Threshold','sliders',105,200,nothing)
 
-    cv2.createTrackbar('a','sliders',80,100,nothing)
+    cv2.createTrackbar('a','sliders',90,100,nothing)
     cv2.createTrackbar('b','sliders',80,500,nothing)
 
     cv2.createTrackbar('Canny Threshold 1','sliders',102,300,nothing)
@@ -28,7 +28,7 @@ def main(fileName):
     cv2.createTrackbar('Minimum Line Length','sliders2',1,300,nothing)
     cv2.createTrackbar('Maximum Line Gap','sliders2',50,300,nothing)
 
-    cv2.createTrackbar('Note Threshold','sliders2',50,100,nothing)
+    cv2.createTrackbar('Note Threshold','sliders2',30,100,nothing)
     cv2.createTrackbar('Picture Scale','sliders2',1000,4000,nothing)
 
     #cap = cv2.VideoCapture(0)
@@ -40,6 +40,8 @@ def main(fileName):
     saveFile = False
     notes = []
     tupleResult = []
+
+    roughGuess = False
 
     while(contProc):
         # Capture frame-by-frame
@@ -79,7 +81,7 @@ def main(fileName):
         horizontal = cv2.erode(horizontal, horizontalStructure)
         horizontal = cv2.dilate(horizontal, horizontalStructure)
 
-        # extract notes
+        # extract notes and other markings
         verticalsize = vertical.shape[0] / vertThresh
         verticalStructure = cv2.getStructuringElement(cv2.MORPH_RECT, (1,verticalsize))
         vertical = cv2.erode(vertical, verticalStructure)
@@ -95,6 +97,7 @@ def main(fileName):
         threshold = cv2.getTrackbarPos('Note Threshold','sliders2')/100.0
         loc = np.where( res >= threshold)
 
+        # filter redundant hits
         locReduced = []
 
         if loc is not None:
@@ -104,12 +107,13 @@ def main(fileName):
                 if locReduced is not None:
                     for locR in locReduced:
                         cx1,cy1 = locR
-                        if distance((x1,y1),(cx1,cy1)) < 20.0:
+                        if distance((x1,y1),(cx1,cy1)) < 10.0:
                             contains = True
                             break
                 if not contains:
                     locReduced.append((x1,y1))
                     
+        # sort hits from left to right
         if locReduced is not None:
             locReduced = sorted(locReduced,key=lambda l:l[0])
             for i in range(len(locReduced)):
@@ -120,12 +124,14 @@ def main(fileName):
                 
 
 
+        # get line calculation variables
         rho = np.pi/(cv2.getTrackbarPos('Rho','sliders2')+0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001)
         theta = cv2.getTrackbarPos('Theta','sliders2')
 
         minLength = cv2.getTrackbarPos('Minimum Line Length','sliders2')
         maxGap = cv2.getTrackbarPos('Maximum Line Gap','sliders2')
 
+        # calculate lines and get rid of redundant lines
         linesReduced = []
 
         lines = cv2.HoughLinesP(horizontal,1,rho,theta,minLineLength=minLength,maxLineGap=maxGap)
@@ -142,6 +148,7 @@ def main(fileName):
                 if not contains:
                     linesReduced.append((x1,y1,x2,y2))
                   
+        # get y values of lines
         barYs = []
           
         if linesReduced is not None:
@@ -153,7 +160,7 @@ def main(fileName):
                 cv2.line(frame, (x1,y1),(x2,y2),(0,255,0),2)
                 barYs.append(y1)
 
-        
+        # calculate average distance between lines
         avgDist = 0.0
 
         if barYs is not None:
@@ -164,10 +171,33 @@ def main(fileName):
 
         errorTol = 0.25
         lineError = int(round(avgDist*errorTol, 0))
+        
+        # adjust picture scaling for accurate note detection
         multiplier = ((h-2.75)*1000)/(avgDist)
-        print multiplier
-        cv2.setTrackbarPos('Picture Scale', 'sliders2', int(round(multiplier*picScale,0)))
+        if roughGuess is False:
+            cv2.setTrackbarPos('Picture Scale', 'sliders2', int(round((multiplier*picScale),0)))
+            roughGuess = True
+        else:
+            if multiplier > 1000:
+                cv2.setTrackbarPos('Picture Scale', 'sliders2', int(round((1000*picScale)+1,0)))
+            elif multiplier < 1000:
+                cv2.setTrackbarPos('Picture Scale', 'sliders2', int(round((1000*picScale)-1,0)))
 
+        # adjust vertical threshold more more accurate note detection
+        linesCheck = cv2.HoughLinesP(vertical_edges,1,rho,theta,minLineLength=minLength,maxLineGap=maxGap)
+        if linesCheck is not None:
+            linesFlag = False
+            for line in linesCheck:
+                x1,y1,x2,y2 = line[0]
+                cv2.line(frame, (x1,y1),(x2,y2),(255,0,0),2)
+                for i in range(len(barYs)):
+                    if distance((0,y1),(0,barYs[i])) < 5.0:
+                        linesFlag = True
+            if linesFlag:
+                vertThreshAdj = vertThresh-1
+                cv2.setTrackbarPos('Vertical Threshold','sliders', int(round(vertThreshAdj,0)))
+
+        # calculate note location based on line locations
         if locReduced is not None:
             for loc in locReduced:
                 result = None
