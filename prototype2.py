@@ -29,22 +29,23 @@ def main(fileName):
     cv2.createTrackbar('Maximum Line Gap','sliders2',50,300,nothing)
 
     cv2.createTrackbar('Note Threshold','sliders2',50,100,nothing)
-    cv2.createTrackbar('Picture Scale','sliders2',100,400,nothing)
+    cv2.createTrackbar('Picture Scale','sliders2',1000,4000,nothing)
 
     #cap = cv2.VideoCapture(0)
 
-    template = cv2.imread('note.png',0)
+    template = cv2.imread('note2.png',0)
     w, h = template.shape[::-1]
 
     contProc = True
     saveFile = False
     notes = []
+    tupleResult = []
 
     while(contProc):
         # Capture frame-by-frame
         frameIn = cv2.imread(fileName)
 
-        picScale = cv2.getTrackbarPos('Picture Scale','sliders2')/100.0
+        picScale = cv2.getTrackbarPos('Picture Scale','sliders2')/1000.0
         frame = cv2.resize(frameIn, (0,0), fx=picScale, fy=picScale) 
 
         #ret, frame = cap.read()
@@ -72,13 +73,15 @@ def main(fileName):
         canny1 = cv2.getTrackbarPos('Canny Threshold 1','sliders')
         canny2 = cv2.getTrackbarPos('Canny Threshold 2','sliders')
 
+        # extract lines
         horizontalsize = horizontal.shape[1] / horizThresh
         horizontalStructure = cv2.getStructuringElement(cv2.MORPH_RECT, (horizontalsize,1))
         horizontal = cv2.erode(horizontal, horizontalStructure)
         horizontal = cv2.dilate(horizontal, horizontalStructure)
 
-        verticalsize = vertical.shape[0] / vertThresh;
-        verticalStructure = cv2.getStructuringElement(cv2.MORPH_RECT, (4,verticalsize));
+        # extract notes
+        verticalsize = vertical.shape[0] / vertThresh
+        verticalStructure = cv2.getStructuringElement(cv2.MORPH_RECT, (1,verticalsize))
         vertical = cv2.erode(vertical, verticalStructure)
         vertical = cv2.dilate(vertical, verticalStructure)
         vertical = cv2.bitwise_not(vertical)
@@ -101,7 +104,7 @@ def main(fileName):
                 if locReduced is not None:
                     for locR in locReduced:
                         cx1,cy1 = locR
-                        if distance((x1,y1),(cx1,cy1)) < 5.0:
+                        if distance((x1,y1),(cx1,cy1)) < 20.0:
                             contains = True
                             break
                 if not contains:
@@ -161,6 +164,9 @@ def main(fileName):
 
         errorTol = 0.25
         lineError = int(round(avgDist*errorTol, 0))
+        multiplier = ((h-2.75)*1000)/(avgDist)
+        print multiplier
+        cv2.setTrackbarPos('Picture Scale', 'sliders2', int(round(multiplier*picScale,0)))
 
         if locReduced is not None:
             for loc in locReduced:
@@ -211,7 +217,12 @@ def main(fileName):
         if saveFile == True:
             outFile = open('Notes.txt','w')
             for i in range(len(notes)):
-                outFile.write("("+notes[i]+",4)\n")
+                temp = []
+                temp.append(notes[i])
+                temp.append(4)
+                temp = tuple(temp)
+                outFile.write(notes[i]+"\n")
+                tupleResult.append(temp)
             outFile.close()
 
         if cv2.waitKey(1) & 0xFF == ord('s'):
@@ -223,7 +234,14 @@ def main(fileName):
         
 
     # When everything done, release the capture
+
     #cap.release()
     cv2.destroyAllWindows()
+    if saveFile == True:
+        return tupleResult
 
-main('testLine.jpg')
+result = main('testLine.jpg')
+if result is not None:
+    result = list(result)
+    for i in range(len(result)):
+        print result[i]
