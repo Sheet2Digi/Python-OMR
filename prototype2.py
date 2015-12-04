@@ -6,7 +6,7 @@ import random
 def nothing(x):
     pass
 
-def main(fileName):
+def processLine(fileName, autoFlag):
 
     cv2.namedWindow('sliders')
     cv2.namedWindow('sliders2')
@@ -47,7 +47,12 @@ def main(fileName):
 
     roughGuess = False
 
+    scaleChanged = True
+    thresholdChanged = True
+    settingsChanged = True
+
     while(contProc):
+        settingsChanged = scaleChanged | thresholdChanged
         # Capture frame-by-frame
         frameIn = cv2.imread(fileName)
 
@@ -199,11 +204,16 @@ def main(fileName):
         if roughGuess is False:
             cv2.setTrackbarPos('Picture Scale', 'sliders2', int(round((multiplier*picScale),0)))
             roughGuess = True
+            scaleChanged = True
         else:
             if multiplier > 1000:
                 cv2.setTrackbarPos('Picture Scale', 'sliders2', int(round((1000*picScale)+1,0)))
+                scaleChanged = True
             elif multiplier < 1000:
                 cv2.setTrackbarPos('Picture Scale', 'sliders2', int(round((1000*picScale)-1,0)))
+                scaleChanged = True
+            else:
+                scaleChanged = False
 
         # adjust vertical threshold more more accurate note detection
         linesCheck = cv2.HoughLinesP(vertical_edges,1,rho,theta,minLineLength=minLength,maxLineGap=maxGap)
@@ -218,6 +228,9 @@ def main(fileName):
             if linesFlag:
                 vertThreshAdj = vertThresh-1
                 cv2.setTrackbarPos('Vertical Threshold','sliders', int(round(vertThreshAdj,0)))
+                thresholdChanged = True
+            else:
+                thresholdChanged = False
 
         # calculate note location based on line locations
         if locReducedFinal is not None:
@@ -264,7 +277,10 @@ def main(fileName):
         cv2.imshow('frame2',template)
         cv2.imshow('frame3',horizontal)
         cv2.imshow('frame4',vertical)
-        cv2.imshow('frame5',vertical_edges)
+
+        settingsChanged = scaleChanged | thresholdChanged
+        if settingsChanged & autoFlag:
+            saveFile = True
 
         if saveFile == True:
             outFile = open('Notes.txt','w')
@@ -292,7 +308,7 @@ def main(fileName):
     if saveFile == True:
         return tupleResult
 
-result = main('testLine.jpg')
+result = processLine('testLine.jpg', False)
 if result is not None:
     result = list(result)
     for i in range(len(result)):
