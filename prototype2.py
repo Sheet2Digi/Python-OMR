@@ -10,8 +10,10 @@ def main(fileName):
 
     cv2.namedWindow('sliders')
     cv2.namedWindow('sliders2')
+    cv2.namedWindow('sliders3')
     cv2.resizeWindow("sliders", 1000, 350)
     cv2.resizeWindow("sliders2", 1000, 350)
+    cv2.resizeWindow("sliders3", 1000, 50)
 
     cv2.createTrackbar('Horizontal Threshold','sliders',5,100,nothing)
     cv2.createTrackbar('Vertical Threshold','sliders',105,200,nothing)
@@ -30,6 +32,8 @@ def main(fileName):
 
     cv2.createTrackbar('Note Threshold','sliders2',30,100,nothing)
     cv2.createTrackbar('Picture Scale','sliders2',1000,4000,nothing)
+
+    cv2.createTrackbar('Final Threshold', 'sliders3',65,100,nothing)
 
     #cap = cv2.VideoCapture(0)
 
@@ -94,6 +98,7 @@ def main(fileName):
 
         template_edges = cv2.Canny(template,canny1,canny2,apertureSize = 3)
         res = cv2.matchTemplate(vertical_edges,template_edges,cv2.TM_CCOEFF_NORMED)
+        #res = cv2.matchTemplate(vertical,template,cv2.TM_CCOEFF_NORMED)
         threshold = cv2.getTrackbarPos('Note Threshold','sliders2')/100.0
         loc = np.where( res >= threshold)
 
@@ -114,6 +119,9 @@ def main(fileName):
                     locReduced.append((x1,y1))
                     
         # sort hits from left to right
+        thresholdFinal = cv2.getTrackbarPos('Final Threshold','sliders3')/100.0
+        locReducedFinal = []
+
         if locReduced is not None:
             locReduced = sorted(locReduced,key=lambda l:l[0])
             for i in range(len(locReduced)):
@@ -121,7 +129,21 @@ def main(fileName):
                 newLoc = (int(loc[0]+w/2.0),int(loc[1]+h/2.0))
                 locReduced[i] = newLoc
                 cv2.circle(frame, (locReduced[i][0],locReduced[i][1]), 5, (0,0,255))
-                
+
+                # extract and filter subimages
+                subim = vertical[(locReduced[i][1]-h/2):(locReduced[i][1]+h/2), (locReduced[i][0]-w/2):(locReduced[i][0]+w/2)].copy()
+                filterResRaw = cv2.matchTemplate(subim,template,cv2.TM_CCOEFF_NORMED)
+                filterResFinal = np.where( filterResRaw >= thresholdFinal)
+                if filterResFinal is not None:
+                    tempLocs = []
+                    for filteredRes in zip(*filterResFinal[::-1]):
+                        x1,y1 = filteredRes
+                        newLoc = (int(x1+w/2.0),int(y1+h/2.0))
+                        tempLocs.append(newLoc)
+                    if len(tempLocs)>0:
+                        cv2.circle(frame, (locReduced[i][0],locReduced[i][1]), 5, (0,255,0))
+                        cv2.rectangle(frame, (locReduced[i][0]-w/2,locReduced[i][1]-h/2), (locReduced[i][0]+w/2,locReduced[i][1]+h/2), (255,200,0), 2)
+                        locReducedFinal.append(locReduced[i])
 
 
         # get line calculation variables
@@ -198,8 +220,8 @@ def main(fileName):
                 cv2.setTrackbarPos('Vertical Threshold','sliders', int(round(vertThreshAdj,0)))
 
         # calculate note location based on line locations
-        if locReduced is not None:
-            for loc in locReduced:
+        if locReducedFinal is not None:
+            for loc in locReducedFinal:
                 result = None
                 x1,y1 = loc
                 if y1 < (barYs[0]-lineError):
@@ -232,7 +254,7 @@ def main(fileName):
                     noteResult = ""
                     noteResult += chr(noteLetter)
                     noteResult += str(octave)
-                    cv2.putText(frame,noteResult,(x1,y1), cv2.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,255),2,cv2.LINE_AA)  #+":"+str(result)
+                    cv2.putText(frame,noteResult,(x1,y1), cv2.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,255),2,cv2.LINE_AA)
                     if saveFile == True:
                         contProc = False
                         notes.append(noteResult)
